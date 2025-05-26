@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SHA-256 to Bank Transfer Initiator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 20px;
+        }
+        .container {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        p {
+            line-height: 1.6;
+            color: #555;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+        input[type="text"] {
+            width: calc(100% - 22px);
+            padding: 10px;
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: monospace; /* For hash and numbers */
+        }
+        button {
+            background-color: #28a745; /* Green for transfer action */
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+        #response {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background-color: #e9e9e9;
+            white-space: pre-wrap; /* To preserve formatting of JSON */
+        }
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+        .success {
+            color: green;
+            font-weight: bold;
+        }
+        .warning {
+            color: orange;
+            font-weight: bold;
+        }
+        small {
+            color: #777;
+            display: block;
+            margin-top: -10px;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Initiate Transfer: From SHA-256 "Account" to Bank</h1>
+
+        <p>
+            This interface allows you to specify a source SHA-256 hash (acting as a unique "account")
+            from which funds will be transferred to a traditional bank routing and account number.
+        </p>
+        <p class="warning">
+            <strong>Security Warning:</strong> For a production system, directly collecting
+            sensitive bank details in a client-side form requires robust security measures
+            (e.g., PCI DSS compliance, tokenization services for card numbers, strict input validation).
+            The actual money movement and validation of the SHA-256 "account" must be handled
+            by a secure, trusted backend server.
+        </p>
+
+        <label for="sourceSha256">Source SHA-256 Hash (your "account number"):</label>
+        <input type="text" id="sourceSha256" placeholder="Paste your 64-character SHA-256 hash here" minlength="64" maxlength="64">
+        <small>Example: `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` (empty string hash)</small>
+
+        <label for="transferAmount">Amount to Transfer:</label>
+        <input type="text" id="transferAmount" placeholder="e.g., 100.50">
+        <small>Enter a numeric value for the transfer amount.</small>
+
+        <h2>Destination Bank Details:</h2>
+
+        <label for="routingNumber">Recipient's Routing Number:</label>
+        <input type="text" id="routingNumber" placeholder="e.g., 123456789" minlength="9" maxlength="9">
+        <small>Typically 9 digits for US banks.</small>
+
+        <label for="accountNumber">Recipient's Account Number:</label>
+        <input type="text" id="accountNumber" placeholder="e.g., 9876543210">
+        <small>Variable length, typically 5-17 digits.</small>
+
+        <button id="initiateTransferButton">Initiate Transfer</button>
+
+        <h2>Server Response:</h2>
+        <div id="response">
+            Waiting for transfer initiation...
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('initiateTransferButton').addEventListener('click', async () => {
+            const sourceSha256 = document.getElementById('sourceSha256').value.trim();
+            const transferAmount = document.getElementById('transferAmount').value.trim();
+            const routingNumber = document.getElementById('routingNumber').value.trim();
+            const accountNumber = document.getElementById('accountNumber').value.trim();
+            const responseDiv = document.getElementById('response');
+
+            // --- Basic Client-Side Validation ---
+            if (!sourceSha256 || sourceSha256.length !== 64 || !/^[0-9a-fA-F]{64}$/.test(sourceSha256)) {
+                responseDiv.innerHTML = '<span class="error">Please enter a valid 64-character SHA-256 hash for the source account.</span>';
+                return;
+            }
+
+            if (!transferAmount || isNaN(parseFloat(transferAmount)) || parseFloat(transferAmount) <= 0) {
+                responseDiv.innerHTML = '<span class="error">Please enter a valid positive numeric amount to transfer.</span>';
+                return;
+            }
+
+            if (!routingNumber || routingNumber.length !== 9 || !/^\d{9}$/.test(routingNumber)) {
+                responseDiv.innerHTML = '<span class="error">Please enter a valid 9-digit routing number.</span>';
+                return;
+            }
+
+            if (!accountNumber || accountNumber.length < 5 || !/^\d+$/.test(accountNumber)) {
+                responseDiv.innerHTML = '<span class="error">Please enter a valid account number (at least 5 digits).</span>';
+                return;
+            }
+
+            responseDiv.innerHTML = 'Preparing transfer request...';
+
+            // --- Data to Send via AJAX ---
+            const dataToSend = {
+                source_sha256_account: sourceSha256,
+                amount: parseFloat(transferAmount), // Ensure it's a number
+                destination_routing_number: routingNumber,
+                destination_account_number: accountNumber
+            };
+
+            // --- Where to Send the AJAX Request ---
+            // This is your backend server endpoint.
+            // Replace with the actual URL of your server-side application.
+            const serverEndpoint = 'http://localhost:3000/api/transfer-funds'; // Example endpoint
+
+            try {
+                responseDiv.innerHTML = `Sending transfer request to server...`;
+                const response = await fetch(serverEndpoint, {
+                    method: 'POST', // Always use POST for sending sensitive data and initiating actions
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(dataToSend)
+                });
+
+                if (!response.ok) {
+                    // If the server responds with an HTTP error status (e.g., 400, 404, 500)
+                    const errorJson = await response.json(); // Try to parse error as JSON
+                    throw new Error(`HTTP error! Status: ${response.status}, Message: ${errorJson.message || response.statusText}`);
+                }
+
+                // Assuming the server responds with JSON for success
+                const jsonResponse = await response.json();
+
+                responseDiv.innerHTML = `
+                    <span class="${jsonResponse.status === 'success' ? 'success' : 'error'}">Server Response:</span>
+                    <pre>${JSON.stringify(jsonResponse, null, 2)}</pre>
+                `;
+
+            } catch (error) {
+                console.error('Error during AJAX transfer request:', error);
+                responseDiv.innerHTML = `<span class="error">Transfer failed: ${error.message}. Check console for details.</span>`;
+            }
+        });
+    </script>
+
+</body>
+</html>
